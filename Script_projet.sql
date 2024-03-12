@@ -86,11 +86,12 @@ Satisfaction AS (
     GROUP BY 
         c.customer_unique_id
 ),
-CustomerCategories AS (
+CustomerProducts AS (
     SELECT 
         c.customer_unique_id,
         COUNT(DISTINCT p.product_category_name) AS DifferentCategories,
-        MAX(p.product_weight_g) AS MaxWeight
+        MAX(p.product_weight_g) AS MaxWeight,
+        MAX(p.product_length_cm * p.product_height_cm * p.product_width_cm) AS MaxVolume
     FROM 
         customers c
     JOIN 
@@ -104,22 +105,29 @@ CustomerCategories AS (
     GROUP BY 
         c.customer_unique_id
 ),
-AverageItemsPerOrder AS (
+CustomerOrderDetail AS (
     SELECT 
         c.customer_unique_id,
         item_count,
-        AVG(item_count) AS AvgItems
+        AVG(OrderItems.item_count) AS AvgItems,
+        AVG(julianday(OrderItems.order_delivered_customer_date) - julianday(OrderItems.order_purchase_timestamp)) AS ActualDeliveryTime,
+        AVG(julianday(OrderItems.order_estimated_delivery_date) - julianday(OrderItems.order_delivered_customer_date)) AS EstimatedActualDifference
     FROM (
         SELECT 
             o.customer_id, 
             o.order_id, 
-            COUNT(oi.order_item_id) AS item_count
+            COUNT(oi.order_item_id) AS item_count,
+            o.order_purchase_timestamp,
+            o.order_estimated_delivery_date,
+            o.order_delivered_customer_date
         FROM 
             orders o
         JOIN 
             order_items oi ON o.order_id = oi.order_id
         WHERE 
             o.order_status NOT IN ('cancelled', 'unavailable')
+            AND o.order_delivered_customer_date IS NOT NULL
+            AND o.order_estimated_delivery_date IS NOT NULL
         GROUP BY 
             o.order_id
     ) AS OrderItems
@@ -138,18 +146,21 @@ SELECT
     f.TotalOrders,
     m.TotalSpent,
     m.TotalFreight,
-    a.AvgItems,
-    a.item_count,
+    co.AvgItems,
+    co.item_count,
+    co.ActualDeliveryTime,
+    co.EstimatedActualDifference,
     s.AverageReviewScore,
     s.NumberOfReviews,
     s.NumberOfCommentTitles,
     s.NumberOfComments,
     c.DifferentCategories,
-    c.MaxWeight
+    c.MaxWeight,
+    c.MaxVolume
 FROM Recency r
 JOIN Profile p ON r.customer_unique_id = p.customer_unique_id
 JOIN Frequency f ON r.customer_unique_id = f.customer_unique_id
 JOIN Monetary m ON r.customer_unique_id = m.customer_unique_id
 LEFT JOIN Satisfaction s ON r.customer_unique_id = s.customer_unique_id
-JOIN CustomerCategories c ON r.customer_unique_id = c.customer_unique_id
-JOIN AverageItemsPerOrder a ON r.customer_unique_id = a.customer_unique_id;
+JOIN CustomerProducts c ON r.customer_unique_id = c.customer_unique_id
+JOIN CustomerOrderDetail co ON r.customer_unique_id = co.customer_unique_id;

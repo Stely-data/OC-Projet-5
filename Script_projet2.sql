@@ -29,6 +29,7 @@ WITH PaymentPreferences AS (
         c.customer_unique_id,
         op.payment_type,
         COUNT(*) AS PaymentCount,
+        SUM(op.payment_installments) AS TotalInstallments, 
         SUM(op.payment_value) AS TotalPaymentValue
     FROM 
         customers c
