@@ -1,3 +1,4 @@
+-- Select informations client
 WITH 
 GeolocAverage AS (
     SELECT
@@ -89,9 +90,7 @@ Satisfaction AS (
 CustomerProducts AS (
     SELECT 
         c.customer_unique_id,
-        COUNT(DISTINCT p.product_category_name) AS DifferentCategories,
-        AVG(p.product_weight_g) AS AvgWeight,
-        AVG(p.product_length_cm * p.product_height_cm * p.product_width_cm) AS AvgVolume
+        COUNT(DISTINCT p.product_category_name) AS DifferentCategories
     FROM 
         customers c
     JOIN 
@@ -108,8 +107,11 @@ CustomerProducts AS (
 CustomerOrderDetail AS (
     SELECT 
         c.customer_unique_id,
-        item_count,
+        SUM(OrderItems.item_count) AS nb_item,
+        COUNT(OrderItems.order_id) AS order_count,
         AVG(OrderItems.item_count) AS AvgItems,
+        AVG(OrderItems.total_weight) AS AvgWeight,
+        AVG(OrderItems.total_volume) AS AvgVolume, 
         AVG(julianday(OrderItems.order_delivered_customer_date) - julianday(OrderItems.order_purchase_timestamp)) AS ActualDeliveryTime,
         AVG(julianday(OrderItems.order_estimated_delivery_date) - julianday(OrderItems.order_delivered_customer_date)) AS EstimatedActualDifference
     FROM (
@@ -117,6 +119,8 @@ CustomerOrderDetail AS (
             o.customer_id, 
             o.order_id, 
             COUNT(oi.order_item_id) AS item_count,
+            SUM(p.product_weight_g) AS total_weight, 
+            SUM(p.product_length_cm * p.product_height_cm * p.product_width_cm) AS total_volume, 
             o.order_purchase_timestamp,
             o.order_estimated_delivery_date,
             o.order_delivered_customer_date
@@ -124,6 +128,8 @@ CustomerOrderDetail AS (
             orders o
         JOIN 
             order_items oi ON o.order_id = oi.order_id
+        JOIN 
+            products p ON oi.product_id = p.product_id 
         WHERE 
             o.order_status NOT IN ('cancelled', 'unavailable')
             AND o.order_delivered_customer_date IS NOT NULL
@@ -147,7 +153,7 @@ SELECT
     m.TotalSpent,
     m.TotalFreight,
     co.AvgItems,
-    co.item_count,
+    co.nb_item,
     co.ActualDeliveryTime,
     co.EstimatedActualDifference,
     s.AverageReviewScore,
@@ -155,8 +161,8 @@ SELECT
     s.NumberOfCommentTitles,
     s.NumberOfComments,
     c.DifferentCategories,
-    c.AvgWeight,
-    c.AvgVolume
+    co.AvgWeight,
+    co.AvgVolume
 FROM Recency r
 JOIN Profile p ON r.customer_unique_id = p.customer_unique_id
 JOIN Frequency f ON r.customer_unique_id = f.customer_unique_id
@@ -164,3 +170,49 @@ JOIN Monetary m ON r.customer_unique_id = m.customer_unique_id
 LEFT JOIN Satisfaction s ON r.customer_unique_id = s.customer_unique_id
 JOIN CustomerProducts c ON r.customer_unique_id = c.customer_unique_id
 JOIN CustomerOrderDetail co ON r.customer_unique_id = co.customer_unique_id;
+
+
+-- Select des catégories par client
+WITH CustomerProductCounts AS (
+    SELECT 
+        c.customer_unique_id,
+        COALESCE(t.product_category_name_english, 'Miscellaneous') AS product_category_name_english,
+        COUNT(*) AS CategoryCount,
+        SUM(oi.price) AS TotalSpentPerCategory
+    FROM 
+        customers c
+    JOIN 
+        orders o ON c.customer_id = o.customer_id
+    JOIN 
+        order_items oi ON oi.order_id = o.order_id
+    JOIN 
+        products p ON p.product_id = oi.product_id
+    LEFT JOIN 
+        translation t ON p.product_category_name = t.product_category_name
+    WHERE 
+        o.order_status NOT IN ('cancelled', 'unavailable')
+    GROUP BY 
+        c.customer_unique_id,
+        COALESCE(t.product_category_name_english, 'Miscellaneous')
+)
+SELECT * FROM CustomerProductCounts;
+
+
+-- Select des moyens de paiement par client
+WITH PaymentPreferences AS (
+    SELECT 
+        c.customer_unique_id,
+        op.payment_type,
+        COUNT(*) AS PaymentCount,
+        SUM(op.payment_installments) AS TotalInstallments, 
+        SUM(op.payment_value) AS TotalPaymentValue
+    FROM 
+        customers c
+    JOIN 
+        orders o ON c.customer_id = o.customer_id
+    JOIN 
+        order_pymts op ON o.order_id = op.order_id
+    GROUP BY 
+        c.customer_unique_id, op.payment_type
+)
+SELECT * FROM PaymentPreferences;
