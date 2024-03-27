@@ -113,7 +113,7 @@ CustomerOrderDetail AS (
         AVG(OrderItems.total_weight) AS AvgWeight,
         AVG(OrderItems.total_volume) AS AvgVolume, 
         AVG(julianday(OrderItems.order_delivered_customer_date) - julianday(OrderItems.order_purchase_timestamp)) AS ActualDeliveryTime,
-        AVG(julianday(OrderItems.order_estimated_delivery_date) - julianday(OrderItems.order_delivered_customer_date)) AS EstimatedActualDifference
+        AVG(julianday(OrderItems.order_delivered_customer_date) - julianday(OrderItems.order_estimated_delivery_date)) AS DeliveryDelay
     FROM (
         SELECT 
             o.customer_id, 
@@ -155,7 +155,7 @@ SELECT
     co.AvgItems,
     co.nb_item,
     co.ActualDeliveryTime,
-    co.EstimatedActualDifference,
+    co.DeliveryDelay,
     s.AverageReviewScore,
     s.NumberOfReviews,
     s.NumberOfCommentTitles,
