@@ -120,7 +120,7 @@ CustomerOrderDetail AS (
         AVG(OrderItems.total_weight) AS AvgWeight,
         AVG(OrderItems.total_volume) AS AvgVolume, 
         AVG(julianday(OrderItems.order_delivered_customer_date) - julianday(OrderItems.order_purchase_timestamp)) AS ActualDeliveryTime,
-        AVG(julianday(OrderItems.order_estimated_delivery_date) - julianday(OrderItems.order_delivered_customer_date)) AS EstimatedActualDifference
+        AVG(julianday(OrderItems.order_delivered_customer_date) - julianday(OrderItems.order_estimated_delivery_date)) AS DeliveryDelay
     FROM (
         SELECT 
             o.customer_id, 
@@ -163,7 +163,7 @@ SELECT
     co.AvgItems,
     co.nb_item,
     co.ActualDeliveryTime,
-    co.EstimatedActualDifference,
+    co.DeliveryDelay,
     s.AverageReviewScore,
     s.NumberOfReviews,
     s.NumberOfCommentTitles,
@@ -179,32 +179,6 @@ LEFT JOIN Satisfaction s ON r.customer_unique_id = s.customer_unique_id
 JOIN CustomerProducts c ON r.customer_unique_id = c.customer_unique_id
 JOIN CustomerOrderDetail co ON r.customer_unique_id = co.customer_unique_id;
 
-
--- Select des catégories par client
-WITH CustomerProductCounts AS (
-    SELECT 
-        c.customer_unique_id,
-        COALESCE(t.product_category_name_english, 'Miscellaneous') AS product_category_name_english,
-        COUNT(*) AS CategoryCount,
-        SUM(oi.price) AS TotalSpentPerCategory
-    FROM 
-        customers c
-    JOIN 
-        orders o ON c.customer_id = o.customer_id
-    JOIN 
-        order_items oi ON oi.order_id = o.order_id
-    JOIN 
-        products p ON p.product_id = oi.product_id
-    LEFT JOIN 
-        translation t ON p.product_category_name = t.product_category_name
-    WHERE 
-        o.order_status NOT IN ('cancelled', 'unavailable')
-        AND o.order_purchase_timestamp BETWEEN '2017-01-01' AND '2018-08-01'
-    GROUP BY 
-        c.customer_unique_id,
-        COALESCE(t.product_category_name_english, 'Miscellaneous')
-)
-SELECT * FROM CustomerProductCounts;
 
 
 -- Select des moyens de paiement par client
